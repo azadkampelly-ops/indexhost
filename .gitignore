@@ -3,4 +3,10 @@ node_modules/
 uploads/
 sites/
 .env
+.env.*
+!.env.example
 .DS_Store
+server-backup.js
+test-website/
+test-website.zip
+mywebsite.html
