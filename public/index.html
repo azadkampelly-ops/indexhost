@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="INDEX Host — publish and manage your static websites.">
+  <title>INDEX Host — Website Hosting</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">INDEX<span>Host</span></a>
+    <span class="status">
+      <span class="dot"></span> Hosting platform
+    </span>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <p class="eyebrow">YOUR WEBSITE. YOUR CONTROL.</p>
+      <h1>Put your ideas<br>on the internet.</h1>
+      <p class="description">
+        Upload your website, publish your project,
+        and share it with the world.
+      </p>
+      <div class="actions">
+        <button id="startButton">Get started</button>
+        <span class="note">Static website hosting</span>
+      </div>
+    </section>
+
+    <section class="panel" id="projects">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">WORKSPACE</p>
+          <h2>Your projects</h2>
+        </div>
+        <span class="count">INDEX HOST</span>
+      </div>
+
+      <div class="project-card">
+        <div class="project-icon">I</div>
+        <div class="project-info">
+          <h3>INDEX Host</h3>
+          <p>Your hosting workspace is ready to build.</p>
+        </div>
+        <span class="badge">Prototype</span>
+      </div>
+
+      <div class="notice" id="message">
+        Connecting to INDEX Host...
+      </div>
+
+      <!-- Website upload form -->
+      <div class="upload-panel">
+        <h2>Publish a website</h2>
+        <p>Select a ZIP file containing your HTML, CSS and JavaScript files.</p>
+
+        <form id="uploadForm">
+          <label for="websiteName">Website name</label>
+          <input
+            type="text"
+            id="websiteName"
+            name="websiteName"
+            placeholder="my-website"
+            pattern="[a-z0-9-]{1,50}"
+            title="Use lowercase letters, numbers, and hyphens."
+            required
+          >
+
+          <label for="websiteZip">Website ZIP file</label>
+          <input
+            type="file"
+            id="websiteZip"
+            name="websiteZip"
+            accept=".zip,application/zip"
+            required
+          >
+
+          <button type="submit">Upload website</button>
+          <p id="uploadMessage" role="status"></p>
+        </form>
+      </div>
+    </section>
+
+    <footer>© 2026 INDEX Host · Built by INDEX</footer>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
