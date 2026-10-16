@@ -4,357 +4,427 @@
 const $ = (id) => document.getElementById(id);
 
 const loginPanel = $("loginPanel");
-const appShell = $("appShell");
-const loginForm = $("loginForm");
-const loginButton = $("loginButton");
-const adminPassword = $("adminPassword");
+const dashboardPanel = $("dashboardPanel");
+const authForm = $("authForm");
+const accountEmail = $("accountEmail");
+const accountPassword = $("accountPassword");
+const confirmPassword = $("confirmPassword");
+const confirmPasswordField = $("confirmPasswordField");
+const authButton = $("authButton");
+const authTitle = $("authTitle");
+const authDescription = $("authDescription");
+const authSwitchText = $("authSwitchText");
+const authSwitchButton = $("authSwitchButton");
 const loginMessage = $("loginMessage");
 const logoutButton = $("logoutButton");
+const accountLabel = $("accountLabel");
+
 const uploadForm = $("uploadForm");
+const websiteName = $("websiteName");
+const websiteZip = $("websiteZip");
 const uploadButton = $("uploadButton");
 const uploadMessage = $("uploadMessage");
-const dashboardMessage = $("dashboardMessage");
-const refreshButton = $("refreshButton");
-const sitesTableBody = $("sitesTableBody");
+
+const totalSites = $("totalSites");
+const publishedSites = $("publishedSites");
+const sitesList = $("sitesList");
+const sitesMessage = $("sitesMessage");
 const siteSearch = $("siteSearch");
+const refreshButton = $("refreshButton");
 
-let allSites = [];
-let refreshInProgress = false;
+let authMode = "login";
+let sites = [];
+let loadingSites = false;
+let uploading = false;
+let checkingAuth = false;
 
-$("currentYear").textContent = new Date().getFullYear();
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
 
 function showMessage(element, message, type = "") {
-  element.textContent = message;
-  element.className = "form-message" + (type ? ` ${type}` : "");
-}
+  if (!element) return;
 
-function showDashboardNotice(message = "", isError = false) {
-  dashboardMessage.textContent = message;
-  dashboardMessage.className = "notice" + (isError ? " error" : "");
-  dashboardMessage.hidden = !message;
+  element.textContent = message;
+  element.classList.remove("success", "error");
+
+  if (type) {
+    element.classList.add(type);
+  }
 }
 
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
-    ...options
+    cache: "no-store",
+    ...options,
+    headers: {
+      ...(options.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
+      ...(options.headers || {})
+    }
   });
 
+  const contentType = response.headers.get("content-type") || "";
   let data = {};
-  try {
+
+  if (contentType.includes("application/json")) {
     data = await response.json();
-  } catch {
-    data = {};
   }
 
   if (!response.ok) {
     if (response.status === 401) {
       setAuthenticated(false);
     }
-    throw new Error(data.message || `Request failed (${response.status})`);
+
+    throw new Error(data.error || `Request failed (${response.status}).`);
   }
 
   return data;
 }
 
-function setAuthenticated(authenticated) {
-  loginPanel.hidden = authenticated;
-  appShell.hidden = !authenticated;
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => {
+    const replacements = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
 
-  if (!authenticated) {
-    adminPassword.value = "";
-    allSites = [];
-  }
-}
-
-function setServerStatus(online, label = "") {
-  const text = label || (online ? "Online" : "Unavailable");
-  $("sidebarStatus").textContent = text;
-  $("platformStatus").textContent = online ? "Online" : "Offline";
-  $("platformNote").textContent = online
-    ? "Server health check passed"
-    : "Could not confirm server health";
-
-  $("sidebarStatusDot").className =
-    "status-dot " + (online ? "online" : "offline");
-
-  const adminDot = document.querySelector(".admin-pill .status-dot");
-  if (adminDot) {
-    adminDot.className = "status-dot " + (online ? "online" : "offline");
-  }
-}
-
-function getSiteUrl(site) {
-  if (site.url) {
-    try {
-      const url = new URL(site.url, window.location.origin);
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        return url.href;
-      }
-    } catch {
-      // Use the standard INDEX Host site route below.
-    }
-  }
-
-  return `/sites/${encodeURIComponent(site.name)}/`;
+    return replacements[character];
+  });
 }
 
 function formatDate(value) {
   if (!value) return "Date unavailable";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
 
   return date.toLocaleDateString(undefined, {
-    day: "numeric",
+    year: "numeric",
     month: "short",
-    year: "numeric"
+    day: "numeric"
   });
 }
 
-function getValidDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+// --------------------------------------------------
+// AUTHENTICATION UI
+// --------------------------------------------------
+
+function setAuthMode(mode) {
+  authMode = mode === "signup" ? "signup" : "login";
+
+  const isSignup = authMode === "signup";
+
+  authTitle.textContent = isSignup ? "Create your account" : "Welcome back";
+
+  authDescription.textContent = isSignup
+    ? "Create an account to publish and manage your websites."
+    : "Sign in to manage your websites.";
+
+  authButton.textContent = isSignup ? "Create account" : "Sign in";
+
+  authSwitchText.textContent = isSignup
+    ? "Already have an account?"
+    : "Don't have an account?";
+
+  authSwitchButton.textContent = isSignup ? "Sign in" : "Create account";
+
+  confirmPasswordField.hidden = !isSignup;
+  confirmPassword.required = isSignup;
+
+  accountPassword.autocomplete = isSignup
+    ? "new-password"
+    : "current-password";
+
+  confirmPassword.autocomplete = "new-password";
 }
 
-function updateStatistics(sites) {
-  $("totalSites").textContent = sites.length;
+function setAuthenticated(authenticated, email = "") {
+  loginPanel.hidden = authenticated;
+  dashboardPanel.hidden = !authenticated;
 
-  const now = Date.now();
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-  const recent = sites.filter((site) => {
-    const date = getValidDate(site.created_at);
-    return date && date.getTime() >= weekAgo && date.getTime() <= now;
-  });
-
-  $("recentSites").textContent = recent.length;
-
-  const sorted = [...sites].sort((a, b) => {
-    const aDate = getValidDate(a.created_at)?.getTime() || 0;
-    const bDate = getValidDate(b.created_at)?.getTime() || 0;
-    return bDate - aDate;
-  });
-
-  if (sorted.length) {
-    $("latestSite").textContent = sorted[0].name || "Unnamed";
-    $("latestDate").textContent = formatDate(sorted[0].created_at);
+  if (authenticated) {
+    accountLabel.textContent = email || "Signed in";
+    showMessage(loginMessage, "");
   } else {
-    $("latestSite").textContent = "—";
-    $("latestDate").textContent = "No uploads yet";
+    accountLabel.textContent = "";
+    sites = [];
+    updateStatistics([]);
+    renderSites();
   }
 }
 
-function renderSites() {
-  const query = siteSearch.value.trim().toLowerCase();
+authSwitchButton.addEventListener("click", () => {
+  showMessage(loginMessage, "");
+  setAuthMode(authMode === "login" ? "signup" : "login");
+});
 
-  const filtered = allSites.filter((site) =>
-    String(site.name || "").toLowerCase().includes(query)
-  );
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
 
-  sitesTableBody.replaceChildren();
+  const email = accountEmail.value.trim().toLowerCase();
+  const password = accountPassword.value;
 
-  if (!filtered.length) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 4;
-    cell.className = "empty-state";
-    cell.textContent = allSites.length
-      ? "No websites match your search."
-      : "No websites published yet. Upload your first website above.";
-    row.appendChild(cell);
-    sitesTableBody.appendChild(row);
-    $("siteCount").textContent = allSites.length
-      ? "0 matching websites"
-      : "0 websites";
+  if (!email || !password) {
+    showMessage(loginMessage, "Enter your email and password.", "error");
     return;
   }
 
-  filtered.forEach((site) => {
-    const row = document.createElement("tr");
-
-    const websiteCell = document.createElement("td");
-    const siteIdentity = document.createElement("div");
-    siteIdentity.className = "site-cell";
-
-    const icon = document.createElement("span");
-    icon.className = "site-icon";
-    icon.textContent = String(site.name || "W").charAt(0).toUpperCase();
-
-    const identityText = document.createElement("div");
-    const name = document.createElement("span");
-    name.className = "site-name";
-    name.textContent = site.name || "Unnamed website";
-
-    const subtitle = document.createElement("span");
-    subtitle.className = "site-subtitle";
-    subtitle.textContent = "Static website";
-
-    identityText.append(name, subtitle);
-    siteIdentity.append(icon, identityText);
-    websiteCell.appendChild(siteIdentity);
-
-    const dateCell = document.createElement("td");
-    dateCell.textContent = formatDate(site.created_at);
-
-    const statusCell = document.createElement("td");
-    const status = document.createElement("span");
-    status.className = "published-pill";
-    status.textContent = "Published";
-    statusCell.appendChild(status);
-
-    const actionCell = document.createElement("td");
-    const link = document.createElement("a");
-    link.className = "action-link";
-    link.href = getSiteUrl(site);
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = "Open site ↗";
-    actionCell.appendChild(link);
-
-    row.append(websiteCell, dateCell, statusCell, actionCell);
-    sitesTableBody.appendChild(row);
-  });
-
-  $("siteCount").textContent =
-    `${filtered.length} website${filtered.length === 1 ? "" : "s"}`;
-}
-
-async function checkServerHealth() {
-  try {
-    const response = await fetch("/api/health", {
-      credentials: "same-origin",
-      cache: "no-store"
-    });
-
-    if (!response.ok) throw new Error("Health check failed");
-
-    setServerStatus(true);
-  } catch {
-    // Health endpoint may not be available in every existing server version.
-    // The website list and login are checked independently.
-    setServerStatus(false, "Health check unavailable");
-  }
-}
-
-async function loadSites() {
-  const data = await apiRequest("/api/sites", {
-    cache: "no-store"
-  });
-
-  if (!Array.isArray(data.sites)) {
-    throw new Error("The website list response was not in the expected format.");
-  }
-
-  allSites = data.sites;
-  updateStatistics(allSites);
-  renderSites();
-}
-
-async function refreshDashboard() {
-  if (refreshInProgress) return;
-  refreshInProgress = true;
-  refreshButton.disabled = true;
-  refreshButton.textContent = "Refreshing…";
-  showDashboardNotice();
-
-  try {
-    await Promise.all([loadSites(), checkServerHealth()]);
-    showDashboardNotice("Dashboard data refreshed.");
-    window.setTimeout(() => showDashboardNotice(), 2500);
-  } catch (error) {
-    showDashboardNotice(error.message || "Could not load dashboard data.", true);
-  } finally {
-    refreshInProgress = false;
-    refreshButton.disabled = false;
-    refreshButton.textContent = "↻ Refresh data";
-  }
-}
-
-async function checkLoginStatus() {
-  try {
-    const data = await apiRequest("/api/admin/status", {
-      cache: "no-store"
-    });
-
-    setAuthenticated(data.authenticated === true);
-
-    if (data.authenticated === true) {
-      await refreshDashboard();
-    } else {
-      adminPassword.focus();
+  if (authMode === "signup") {
+    if (password.length < 10 || password.length > 128) {
+      showMessage(
+        loginMessage,
+        "Password must be 10–128 characters long.",
+        "error"
+      );
+      return;
     }
-  } catch {
-    setAuthenticated(false);
-    showMessage(
-      loginMessage,
-      "Could not check login status. Make sure the server is running, then refresh.",
-      "error"
-    );
-  }
-}
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+    if (password !== confirmPassword.value) {
+      showMessage(loginMessage, "Passwords do not match.", "error");
+      return;
+    }
+  }
+
+  authButton.disabled = true;
+  authButton.textContent = authMode === "signup"
+    ? "Creating account..."
+    : "Signing in...";
+
   showMessage(loginMessage, "");
 
-  loginButton.disabled = true;
-  loginButton.textContent = "Signing in…";
-
   try {
-    const data = await apiRequest("/api/admin/login", {
+    const endpoint = authMode === "signup"
+      ? "/api/auth/signup"
+      : "/api/auth/login";
+
+    const result = await apiRequest(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: adminPassword.value })
+      body: JSON.stringify({ email, password })
     });
 
-    if (data.authenticated !== true) {
-      throw new Error("Login was not confirmed by the server.");
+    if (result.requiresEmailConfirmation) {
+      // Switch modes first, then show the confirmation message.
+      setAuthMode("login");
+      accountPassword.value = "";
+      confirmPassword.value = "";
+
+      showMessage(
+        loginMessage,
+        result.message ||
+          "Check your email to confirm your account, then sign in.",
+        "success"
+      );
+
+      return;
     }
 
-    setAuthenticated(true);
-    adminPassword.value = "";
-    await refreshDashboard();
+    setAuthenticated(true, result.email || email);
+
+    authForm.reset();
+    confirmPassword.value = "";
+
+    await loadSites();
   } catch (error) {
-    showMessage(loginMessage, error.message || "Sign-in failed.", "error");
+    showMessage(
+      loginMessage,
+      error.message || "Authentication failed. Please try again.",
+      "error"
+    );
   } finally {
-    loginButton.disabled = false;
-    loginButton.innerHTML = 'Sign in <span aria-hidden="true">→</span>';
+    authButton.disabled = false;
+    authButton.textContent =
+      authMode === "signup" ? "Create account" : "Sign in";
   }
 });
 
 logoutButton.addEventListener("click", async () => {
   logoutButton.disabled = true;
+
   try {
-    await apiRequest("/api/admin/logout", { method: "POST" });
-    setAuthenticated(false);
-    showMessage(loginMessage, "You have signed out.", "success");
+    await apiRequest("/api/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
   } catch (error) {
-    showDashboardNotice(error.message || "Sign-out failed.", true);
+    console.error("Sign-out request failed:", error);
   } finally {
+    setAuthenticated(false);
+    setAuthMode("login");
+    authForm.reset();
     logoutButton.disabled = false;
+    showMessage(loginMessage, "");
   }
 });
 
+// --------------------------------------------------
+// WEBSITE STATISTICS
+// --------------------------------------------------
+
+function updateStatistics(list) {
+  totalSites.textContent = String(list.length);
+  publishedSites.textContent = String(list.length);
+}
+
+// --------------------------------------------------
+// WEBSITE LIST
+// --------------------------------------------------
+
+function renderSites() {
+  const query = siteSearch.value.trim().toLowerCase();
+
+  const filtered = sites.filter((site) =>
+    String(site.name || "").toLowerCase().includes(query)
+  );
+
+  updateStatistics(sites);
+
+  if (!filtered.length) {
+    sitesList.replaceChildren();
+
+    const empty = document.createElement("p");
+    empty.textContent = query
+      ? "No websites match your search."
+      : "You haven't published any websites yet.";
+
+    sitesList.appendChild(empty);
+    return;
+  }
+
+  // Names and dates are escaped before insertion into HTML.
+  sitesList.innerHTML = filtered.map((site) => {
+    const name = escapeHtml(site.name);
+    const date = escapeHtml(formatDate(site.created_at));
+    const encodedName = encodeURIComponent(site.name);
+    const publicUrl = `/sites/${encodedName}/`;
+
+    return `
+      <article class="site-card">
+        <div class="site-info">
+          <h3>${name}</h3>
+          <p>Published ${date}</p>
+          <p class="site-url">${escapeHtml(publicUrl)}</p>
+        </div>
+
+        <div class="site-actions">
+          <a
+            class="button-link"
+            href="${escapeHtml(publicUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Visit website</a>
+
+          <button
+            type="button"
+            class="copy-site-button"
+            data-site-url="${escapeHtml(publicUrl)}"
+          >Copy link</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+sitesList.addEventListener("click", async (event) => {
+  const button = event.target.closest(".copy-site-button");
+
+  if (!button) return;
+
+  const url = new URL(button.dataset.siteUrl, window.location.origin).href;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    const previousText = button.textContent;
+    button.textContent = "Copied!";
+
+    setTimeout(() => {
+      button.textContent = previousText;
+    }, 1500);
+  } catch {
+    window.prompt("Copy this website link:", url);
+  }
+});
+
+siteSearch.addEventListener("input", renderSites);
+
+async function loadSites() {
+  if (loadingSites || dashboardPanel.hidden) return;
+
+  loadingSites = true;
+  refreshButton.disabled = true;
+  showMessage(sitesMessage, "Loading your websites...");
+
+  try {
+    const result = await apiRequest("/api/sites");
+
+    sites = Array.isArray(result.sites) ? result.sites : [];
+
+    renderSites();
+    showMessage(
+      sitesMessage,
+      `${sites.length} website${sites.length === 1 ? "" : "s"} found.`,
+      "success"
+    );
+  } catch (error) {
+    sites = [];
+    renderSites();
+
+    showMessage(
+      sitesMessage,
+      error.message || "Could not load your websites.",
+      "error"
+    );
+  } finally {
+    loadingSites = false;
+    refreshButton.disabled = false;
+  }
+}
+
+refreshButton.addEventListener("click", loadSites);
+
+// --------------------------------------------------
+// WEBSITE UPLOAD
+// --------------------------------------------------
+
 uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  showMessage(uploadMessage, "");
 
-  const name = $("websiteName").value.trim();
-  const file = $("websiteZip").files[0];
+  if (uploading) return;
 
-  if (!/^[a-z0-9-]{1,50}$/.test(name)) {
+  const name = websiteName.value.trim().toLowerCase();
+  const file = websiteZip.files[0];
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) ||
+      name.length < 3 ||
+      name.length > 50) {
     showMessage(
       uploadMessage,
-      "Use 1–50 lowercase letters, numbers or hyphens for the website name.",
+      "Use 3–50 lowercase letters, numbers and hyphens for the website name.",
       "error"
     );
     return;
   }
 
-  if (!file || !file.name.toLowerCase().endsWith(".zip")) {
-    showMessage(uploadMessage, "Please select a ZIP file.", "error");
+  if (!file) {
+    showMessage(uploadMessage, "Choose a ZIP file first.", "error");
+    return;
+  }
+
+  if (!file.name.toLowerCase().endsWith(".zip")) {
+    showMessage(uploadMessage, "Choose a .zip file.", "error");
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showMessage(uploadMessage, "ZIP file must not exceed 10 MB.", "error");
     return;
   }
 
@@ -362,53 +432,78 @@ uploadForm.addEventListener("submit", async (event) => {
   formData.append("websiteName", name);
   formData.append("websiteZip", file);
 
+  uploading = true;
   uploadButton.disabled = true;
-  uploadButton.textContent = "Uploading…";
+  uploadButton.textContent = "Publishing...";
+  showMessage(uploadMessage, "Uploading and publishing your website...");
 
   try {
-    const data = await apiRequest("/api/sites", {
+    const result = await apiRequest("/api/sites", {
       method: "POST",
       body: formData
     });
 
-    showMessage(uploadMessage, data.message || "Website published successfully.", "success");
+    showMessage(
+      uploadMessage,
+      "Website published successfully!",
+      "success"
+    );
+
     uploadForm.reset();
 
     await loadSites();
-    await checkServerHealth();
 
-    if (data.url) {
+    if (result.site?.url) {
       const link = document.createElement("a");
-      link.href = getSiteUrl({ name, url: data.url });
+      link.href = result.site.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.textContent = " Open published website ↗";
-      link.className = "action-link";
-
-      uploadMessage.appendChild(document.createTextNode(" "));
+      link.textContent = " Open published website";
       uploadMessage.appendChild(link);
     }
   } catch (error) {
-    showMessage(uploadMessage, error.message || "Website upload failed.", "error");
+    showMessage(
+      uploadMessage,
+      error.message || "Website upload failed.",
+      "error"
+    );
   } finally {
+    uploading = false;
     uploadButton.disabled = false;
-    uploadButton.textContent = "Upload & publish ↗";
+    uploadButton.textContent = "Publish website";
   }
 });
 
-refreshButton.addEventListener("click", refreshDashboard);
-siteSearch.addEventListener("input", renderSites);
+// --------------------------------------------------
+// INITIAL AUTHENTICATION CHECK
+// --------------------------------------------------
 
-$("menuButton").addEventListener("click", () => {
-  const isOpen = $("sidebar").classList.toggle("open");
-  $("menuButton").setAttribute("aria-expanded", String(isOpen));
-});
+async function initializeApp() {
+  if (checkingAuth) return;
 
-document.querySelectorAll(".nav-item").forEach((item) => {
-  item.addEventListener("click", () => {
-    $("sidebar").classList.remove("open");
-    $("menuButton").setAttribute("aria-expanded", "false");
-  });
-});
+  checkingAuth = true;
+  setAuthenticated(false);
+  setAuthMode("login");
 
-checkLoginStatus();
+  try {
+    const result = await apiRequest("/api/auth/status");
+
+    if (result.authenticated) {
+      setAuthenticated(true, result.email || "");
+      await loadSites();
+    } else {
+      setAuthenticated(false);
+    }
+  } catch (error) {
+    setAuthenticated(false);
+    showMessage(
+      loginMessage,
+      "Unable to connect to INDEX Host. Refresh the page and try again.",
+      "error"
+    );
+  } finally {
+    checkingAuth = false;
+  }
+}
+
+initializeApp();
