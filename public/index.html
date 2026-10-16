@@ -4,89 +4,171 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="INDEX Host — publish and manage your static websites.">
-  <title>INDEX Host — Website Hosting</title>
+  <meta name="theme-color" content="#101828">
+  <meta name="description" content="INDEX Host — manage and publish your websites.">
+  <title>Dashboard | INDEX Host</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">INDEX<span>Host</span></a>
-    <span class="status">
-      <span class="dot"></span> Hosting platform
-    </span>
-  </header>
+  <div class="login-screen" id="loginPanel">
+    <div class="login-card">
+      <div class="brand-mark">I</div>
+      <p class="eyebrow">INDEX PLATFORM</p>
+      <h1>INDEX Host</h1>
+      <p class="muted">Sign in to manage your hosted websites.</p>
+      <form id="loginForm">
+        <label for="adminPassword">Admin password</label>
+        <input id="adminPassword" name="password" type="password"
+               placeholder="Enter your admin password" required
+               autocomplete="current-password">
+        <button class="button primary full-width" id="loginButton" type="submit">
+          Sign in <span aria-hidden="true">→</span>
+        </button>
+        <p class="form-message" id="loginMessage" role="status"></p>
+      </form>
+      <p class="tiny muted">Secure administration · INDEX Host</p>
+    </div>
+  </div>
 
-  <main class="container">
-    <section class="hero">
-      <p class="eyebrow">YOUR WEBSITE. YOUR CONTROL.</p>
-      <h1>Put your ideas<br>on the internet.</h1>
-      <p class="description">
-        Upload your website, publish your project,
-        and share it with the world.
-      </p>
-      <div class="actions">
-        <button id="startButton">Get started</button>
-        <span class="note">Static website hosting</span>
-      </div>
-    </section>
+  <div class="app-shell" id="appShell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/" aria-label="INDEX Host home">
+        <span class="brand-mark small-mark">I</span>
+        <span><strong>INDEX Host</strong><small>HOSTING PLATFORM</small></span>
+      </a>
 
-    <section class="panel" id="projects">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">WORKSPACE</p>
-          <h2>Your projects</h2>
+      <p class="nav-label">WORKSPACE</p>
+      <a class="nav-item active" href="#overview"><span>▦</span> Overview</a>
+      <a class="nav-item" href="#websites"><span>▤</span> My websites</a>
+      <a class="nav-item" href="#uploadPanel"><span>↑</span> Publish website</a>
+
+      <div class="sidebar-bottom">
+        <div class="server-status">
+          <span class="status-dot" id="sidebarStatusDot"></span>
+          <div><strong id="sidebarStatus">Checking server</strong><small>Platform status</small></div>
         </div>
-        <span class="count">INDEX HOST</span>
+        <button class="button ghost full-width" id="logoutButton" type="button">
+          ↪ Sign out
+        </button>
+        <p class="tiny muted">Powered by INDEX</p>
       </div>
+    </aside>
 
-      <div class="project-card">
-        <div class="project-icon">I</div>
-        <div class="project-info">
-          <h3>INDEX Host</h3>
-          <p>Your hosting workspace is ready to build.</p>
+    <main class="main-content">
+      <header class="topbar">
+        <button class="menu-button" id="menuButton" type="button"
+                aria-label="Toggle navigation" aria-expanded="false">☰</button>
+        <div class="breadcrumb">Workspace <span>/</span> Overview</div>
+        <div class="topbar-right">
+          <span class="admin-pill"><span class="status-dot"></span> Administrator</span>
+          <div class="avatar">I</div>
         </div>
-        <span class="badge">Prototype</span>
-      </div>
+      </header>
 
-      <div class="notice" id="message">
-        Connecting to INDEX Host...
-      </div>
+      <section class="page-content" id="overview">
+        <div class="welcome-row">
+          <div>
+            <p class="eyebrow">YOUR HOSTING WORKSPACE</p>
+            <h1>Dashboard overview</h1>
+            <p class="muted">Manage your websites from one place.</p>
+          </div>
+          <button class="button primary" id="refreshButton" type="button">
+            ↻ Refresh data
+          </button>
+        </div>
 
-      <!-- Website upload form -->
-      <div class="upload-panel">
-        <h2>Publish a website</h2>
-        <p>Select a ZIP file containing your HTML, CSS and JavaScript files.</p>
+        <div class="notice" id="dashboardMessage" role="status" hidden></div>
 
-        <form id="uploadForm">
-          <label for="websiteName">Website name</label>
-          <input
-            type="text"
-            id="websiteName"
-            name="websiteName"
-            placeholder="my-website"
-            pattern="[a-z0-9-]{1,50}"
-            title="Use lowercase letters, numbers, and hyphens."
-            required
-          >
+        <div class="stats-grid">
+          <article class="stat-card">
+            <div class="stat-top"><span>Total websites</span><span class="stat-icon purple">▤</span></div>
+            <div class="stat-value" id="totalSites">—</div>
+            <p class="stat-note">Websites in your account</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span>Platform status</span><span class="stat-icon green">⌁</span></div>
+            <div class="stat-value status-value" id="platformStatus">Checking…</div>
+            <p class="stat-note" id="platformNote">Checking server health</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span>Recent uploads</span><span class="stat-icon blue">↑</span></div>
+            <div class="stat-value" id="recentSites">—</div>
+            <p class="stat-note">Created in the last 7 days</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span>Latest website</span><span class="stat-icon orange">◷</span></div>
+            <div class="stat-value latest-value" id="latestSite">—</div>
+            <p class="stat-note" id="latestDate">No uploads yet</p>
+          </article>
+        </div>
 
-          <label for="websiteZip">Website ZIP file</label>
-          <input
-            type="file"
-            id="websiteZip"
-            name="websiteZip"
-            accept=".zip,application/zip"
-            required
-          >
+        <section class="panel" id="uploadPanel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">QUICK ACTION</p>
+              <h2>Publish a website</h2>
+              <p class="muted">Upload a ZIP containing your static website files.</p>
+            </div>
+            <div class="upload-symbol">↑</div>
+          </div>
+          <form id="uploadForm" class="upload-form">
+            <div class="field">
+              <label for="websiteName">Website name</label>
+              <input id="websiteName" name="websiteName" type="text"
+                     placeholder="my-business" pattern="[a-z0-9-]{1,50}"
+                     maxlength="50" required>
+              <small>Use lowercase letters, numbers and hyphens only.</small>
+            </div>
+            <div class="field">
+              <label for="websiteZip">Website ZIP file</label>
+              <input id="websiteZip" name="websiteZip" type="file"
+                     accept=".zip,application/zip" required>
+              <small>Include your website's index.html file.</small>
+            </div>
+            <button class="button primary upload-button" id="uploadButton" type="submit">
+              Upload &amp; publish ↗
+            </button>
+          </form>
+          <p class="form-message" id="uploadMessage" role="status"></p>
+        </section>
 
-          <button type="submit">Upload website</button>
-          <p id="uploadMessage" role="status"></p>
-        </form>
-      </div>
-    </section>
+        <section class="panel" id="websites">
+          <div class="websites-heading">
+            <div>
+              <p class="eyebrow">YOUR PROJECTS</p>
+              <h2>Hosted websites</h2>
+              <p class="muted">View and open your published websites.</p>
+            </div>
+            <div class="search-box">
+              <span>⌕</span>
+              <input id="siteSearch" type="search" placeholder="Search websites..."
+                     aria-label="Search websites">
+            </div>
+          </div>
 
-    <footer>© 2026 INDEX Host · Built by INDEX</footer>
-  </main>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>WEBSITE</th><th>CREATED</th><th>STATUS</th><th>ACTION</th></tr>
+              </thead>
+              <tbody id="sitesTableBody">
+                <tr><td colspan="4" class="empty-state">Loading websites…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span id="siteCount">Loading websites…</span>
+            <span>INDEX Host</span>
+          </div>
+        </section>
 
-  <script src="/app.js"></script>
+        <footer class="footer">
+          <span>© <span id="currentYear"></span> INDEX Host</span>
+          <span>Website hosting by INDEX</span>
+        </footer>
+      </section>
+    </main>
+  </div>
 </body>
 </html>
